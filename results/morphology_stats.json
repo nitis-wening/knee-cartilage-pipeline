@@ -1,0 +1,42 @@
+{
+  "Patellar": {
+    "volume_cm3_mean": 3.472,
+    "volume_cm3_std": 0.87,
+    "mean_thickness_mm_mean": 2.506,
+    "mean_thickness_mm_std": 0.152,
+    "surface_area_mm2_mean": 2186.2,
+    "surface_area_mm2_std": 388.4,
+    "CoV_volume": 25.1,
+    "CoV_thickness": 6.1
+  },
+  "Femoral": {
+    "volume_cm3_mean": 13.482,
+    "volume_cm3_std": 2.954,
+    "mean_thickness_mm_mean": 2.257,
+    "mean_thickness_mm_std": 0.065,
+    "surface_area_mm2_mean": 9960.8,
+    "surface_area_mm2_std": 1708.2,
+    "CoV_volume": 21.9,
+    "CoV_thickness": 2.9
+  },
+  "Tibial": {
+    "volume_cm3_mean": 5.081,
+    "volume_cm3_std": 1.085,
+    "mean_thickness_mm_mean": 2.281,
+    "mean_thickness_mm_std": 0.119,
+    "surface_area_mm2_mean": 3972.7,
+    "surface_area_mm2_std": 639.2,
+    "CoV_volume": 21.4,
+    "CoV_thickness": 5.2
+  },
+  "Meniscus": {
+    "volume_cm3_mean": 4.233,
+    "volume_cm3_std": 1.104,
+    "mean_thickness_mm_mean": 2.515,
+    "mean_thickness_mm_std": 0.113,
+    "surface_area_mm2_mean": 2722.9,
+    "surface_area_mm2_std": 554.9,
+    "CoV_volume": 26.1,
+    "CoV_thickness": 4.5
+  }
+}
