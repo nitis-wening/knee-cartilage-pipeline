@@ -1,8 +1,8 @@
 # test_mednca_v5_4class_v2.py
 """
 Test + Post-processing NCA v5 4-class — FIXED CC
-CC hanya untuk Patellar + Femoral (bukan Tibial/Meniscus
-karena setelah merge jadi 2 komponen terpisah secara anatomi)
+CC only for Patellar + Femoral (not Tibial/Meniscus
+bcs after merged into 2 separated component anatomically)
 """
 
 import os, json, math, random
@@ -25,7 +25,7 @@ from train_mednca_v5_4class import (
     STEPS_COARSE, STEPS_FINE,
 )
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config
 NPY_DIR   = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
 ANNOT_DIR = '/data1/nitis/kneeproject/data/qdess/v1-release/annotations/v1.0.0'
 BEST_PATH = '/data1/nitis/kneeproject/checkpoints/mednca3d_v5_4class_best.pt'
@@ -35,14 +35,13 @@ CORRUPT   = {'MTR_172.h5'}
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# CC hanya untuk struktur 1 komponen (Patellar + Femoral)
-# Tibial dan Meniscus SKIP karena 2 komponen terpisah setelah merge
+# CC only for 1 structured component (Patellar + Femoral)
+# Tibial and Meniscus SKIP 
 CC_CLASSES = {1, 2}
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
-
-# ── Post-processing ───────────────────────────────────────────────────────────
+# ── Post-processing
 def keep_largest_component(pred):
     """CC hanya untuk Patellar (1) dan Femoral (2)."""
     result = pred.copy()
@@ -59,14 +58,12 @@ def keep_largest_component(pred):
         result[labeled == largest] = c
     return result
 
-
 def apply_threshold(probs, thresholds):
     """Apply per-class threshold ke softmax probabilities."""
     pred = torch.zeros(probs.shape[1:], dtype=torch.long)
     for c in range(NUM_CLASSES):
         pred[probs[c+1] > thresholds[c]] = c + 1
     return pred.numpy()
-
 
 def pseudo_ensemble(model, image, n=5):
     """Run inference n× dan average softmax probabilities."""
@@ -80,8 +77,7 @@ def pseudo_ensemble(model, image, n=5):
         torch.cuda.empty_cache()
     return (accum / n).squeeze(0).cpu()
 
-
-# ── Load thresholds ───────────────────────────────────────────────────────────
+# ── Load thresholds
 def load_thresholds():
     if os.path.exists(THRESH_PATH):
         import json as js
@@ -96,8 +92,7 @@ def load_thresholds():
         print('No threshold file found, using defaults')
         return [0.70, 0.60, 0.45, 0.35]
 
-
-# ── Validation ────────────────────────────────────────────────────────────────
+# ── Validation
 def run_validation(model, thresholds):
     print('\nRunning validation (baseline + PP)...')
     with open(f'{ANNOT_DIR}/val.json') as f:
@@ -158,8 +153,7 @@ def run_validation(model, thresholds):
         for i, name in enumerate(LABEL_NAMES):
             print(f'    {name:<12}: DSC={d[i]:.4f}  HD95={h[i]:.2f}mm  VS={v[i]:.4f}')
 
-
-# ── Test set ──────────────────────────────────────────────────────────────────
+# ── Test set 
 def run_test(model, thresholds):
     print('\n\nRunning test set evaluation...')
     with open(f'{ANNOT_DIR}/test.json') as f:
@@ -247,8 +241,7 @@ def run_test(model, thresholds):
     with open(json_path, 'w') as f: js.dump(summary, f, indent=2)
     print(f'JSON saved → {json_path}')
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── Main
 if __name__ == '__main__':
     print(f'Device : {DEVICE}')
     print(f'Loading NCA v5 4-class from {BEST_PATH}...')
