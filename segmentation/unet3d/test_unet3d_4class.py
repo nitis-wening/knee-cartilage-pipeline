@@ -32,7 +32,7 @@ OUT_DIR   = '/data1/nitis/kneeproject/results'
 CORRUPT   = {'MTR_172.h5'}
 DEVICE    = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# CC hanya Patellar + Femoral
+# CC only Patellar + Femoral
 CC_CLASSES = {1, 2}
 
 os.makedirs(OUT_DIR, exist_ok=True)
