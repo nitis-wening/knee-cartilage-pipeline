@@ -1,12 +1,12 @@
 # train_unet3d_4class.py
 """
-UNet3D dengan 4 kelas (benchmark resmi SKM-TEA):
+UNet3D with 4 class :
   1 = Patellar
   2 = Femoral
-  3 = Tibial    (TC-med + TC-lat digabung)
-  4 = Meniscus  (Men-med + Men-lat digabung)
+  3 = Tibial    (TC-med + TC-lat merged)
+  4 = Meniscus  (Men-med + Men-lat merged)
 
-Config sama persis dengan train_unet3d.py (6 kelas):
+Config same with train_unet3d.py (6 class):
   channels=[32,64,128,256], patch=80³, LR=1e-4, batch=2
 """
 
@@ -20,6 +20,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from scipy.ndimage import distance_transform_edt
 
+# Update these paths according to your setup
 DATA_ROOT   = '/data1/nitis/kneeproject/data/qdess/v1-release'
 ANNOT_DIR   = os.path.join(DATA_ROOT, 'annotations/v1.0.0')
 NPY_DIR     = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
@@ -54,7 +55,6 @@ RESUME         = False
 CKPT_PATH = os.path.join(CKPT_DIR, 'unet3d_4class_resume.pt')
 BEST_PATH = os.path.join(CKPT_DIR, 'unet3d_4class_best.pt')
 
-
 class ConvBlock(nn.Module):
     def __init__(self, in_ch, out_ch, dropout=0.0):
         super().__init__()
@@ -66,7 +66,6 @@ class ConvBlock(nn.Module):
             nn.BatchNorm3d(out_ch), nn.ReLU(inplace=True),
         )
     def forward(self, x): return self.block(x)
-
 
 class UNet3D(nn.Module):
     def __init__(self, in_channels=2, num_classes=4, channels=[32,64,128,256], dropout=0.1):
@@ -106,7 +105,6 @@ def clip_and_normalize(vol):
     if vmax>vmin: vol=(vol-vmin)/(vmax-vmin)
     vol[~mask]=0.0; return vol.astype(np.float32)
 
-
 def seg_to_label_4class(seg):
     label=np.zeros(seg.shape[:3],dtype=np.int64)
     label[seg[...,0]]=1  # Patellar
@@ -116,7 +114,6 @@ def seg_to_label_4class(seg):
     label[seg[...,4]]=4  # Men-med → Meniscus
     label[seg[...,5]]=4  # Men-lat → Meniscus
     return label
-
 
 def augment(image, label):
     if random.random()<0.5:
@@ -137,7 +134,6 @@ def augment(image, label):
             image[c]=np.power(image[c],random.uniform(0.8,1.2)).astype(np.float32)
     return image, label
 
-
 def sample_patch_balanced(image, label, patch_size, pos_ratio=0.8):
     _,H,W,D=image.shape; pH,pW,pD=patch_size
     ph=max(0,pH-H); pw=max(0,pW-W); pd=max(0,pD-D)
@@ -154,7 +150,6 @@ def sample_patch_balanced(image, label, patch_size, pos_ratio=0.8):
             return image[:,h0:h0+pH,w0:w0+pW,d0:d0+pD].copy(),label[h0:h0+pH,w0:w0+pW,d0:d0+pD].copy()
     h0=random.randint(0,max(0,H-pH)); w0=random.randint(0,max(0,W-pW)); d0=random.randint(0,max(0,D-pD))
     return image[:,h0:h0+pH,w0:w0+pW,d0:d0+pD].copy(),label[h0:h0+pH,w0:w0+pW,d0:d0+pD].copy()
-
 
 class SKMTEADataset(Dataset):
     def __init__(self,split,npy_dir,annot_dir,patch_size=(80,80,80),pos_ratio=0.8,do_augment=True):
@@ -289,7 +284,6 @@ def validate(model,loader,device):
                 hl.append(compute_hd95_bbox(po,lo,NUM_CLASSES)); del po,lo
             del pi,lc
     return np.mean(dl,axis=0),np.mean(hl,axis=0),np.mean(vl,axis=0)
-
 
 if __name__=='__main__':
     os.makedirs(LOG_DIR,exist_ok=True); os.makedirs(CKPT_DIR,exist_ok=True); os.makedirs(RESULTS_DIR,exist_ok=True)
