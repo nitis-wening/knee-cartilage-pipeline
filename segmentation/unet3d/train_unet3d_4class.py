@@ -96,7 +96,6 @@ class UNet3D(nn.Module):
         d1=self.dec1(torch.cat([self.up1(d2),e1],1))
         return self.out_conv(d1)
 
-
 def clip_and_normalize(vol):
     vol=vol.astype(np.float32); mask=vol>0
     if mask.sum()==0: return vol
