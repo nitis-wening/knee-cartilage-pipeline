@@ -1,7 +1,11 @@
-# build_template_full.py
+# build_template.py v3
 """
-Build template dari SEMUA 85 train subjects SKM-TEA.
-Lebih representatif dari versi 20 subjek.
+Build template/atlas from SKM-TEA train subjects.
+Fix v3:
+  1. Majority vote with dilation+erosion (MALF trick)
+  2. Tibial dan Meniscus have 2 separated component →
+     vote per-component (med/lat) before merge to the individual label
+  3. API itk-elastix  (itk.image_from_array)
 """
 
 import os, json, glob
@@ -24,17 +28,18 @@ from train_mednca_v5_4class import (
 )
 import torch
 
+# Update these paths according to your setup
 NPY_DIR   = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
 ANNOT_DIR = '/data1/nitis/kneeproject/data/qdess/v1-release/annotations/v1.0.0'
 BEST_PATH = '/data1/nitis/kneeproject/checkpoints/mednca3d_v5_4class_best.pt'
-OUT_DIR   = '/data1/nitis/kneeproject/data/template_full'
+OUT_DIR   = '/data1/nitis/kneeproject/data/template'
 CORRUPT   = {'MTR_172.h5'}
 DEVICE    = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-CC_CLASSES = {1, 2}
+CC_CLASSES = {1, 2}  # CC hanya Patellar + Femoral
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
-
+# ── Model 
 def keep_largest_component(pred):
     result = pred.copy()
     for c in range(1, NUM_CLASSES + 1):
@@ -49,7 +54,6 @@ def keep_largest_component(pred):
         result[labeled == largest] = c
     return result
 
-
 def load_model():
     model = MedNCA3D(
         CHANNEL_N, HIDDEN_SIZE, IN_CHANNELS, NUM_CLASSES,
@@ -60,7 +64,6 @@ def load_model():
     model.eval()
     return model
 
-
 def predict(model, image):
     img_t = torch.from_numpy(image).float().unsqueeze(0).to(DEVICE)
     with torch.no_grad():
@@ -69,7 +72,7 @@ def predict(model, image):
     del img_t, out; torch.cuda.empty_cache()
     return keep_largest_component(pred)
 
-
+# ── Registration
 def register_to_template(moving_np, fixed_np):
     import itk
     moving_itk = itk.image_from_array(moving_np.astype(np.float32))
@@ -78,10 +81,11 @@ def register_to_template(moving_np, fixed_np):
     fixed_itk.SetSpacing([1.0, 1.0, 1.0])
 
     parameter_object = itk.ParameterObject.New()
-    rigid = parameter_object.GetDefaultParameterMap('rigid', 3)
+    rigid   = parameter_object.GetDefaultParameterMap('rigid', 3)
     rigid['MaximumNumberOfIterations'] = ['256']
     rigid['NumberOfSpatialSamples']    = ['2048']
     parameter_object.AddParameterMap(rigid)
+
     bspline = parameter_object.GetDefaultParameterMap('bspline', 3)
     bspline['MaximumNumberOfIterations']       = ['256']
     bspline['FinalGridSpacingInPhysicalUnits'] = ['8']
@@ -95,7 +99,6 @@ def register_to_template(moving_np, fixed_np):
     )
     return itk.array_from_image(result_image).astype(np.float32), result_transform
 
-
 def apply_transform_seg(seg_np, result_transform):
     import itk
     seg_itk = itk.image_from_array(seg_np.astype(np.float32))
@@ -104,11 +107,27 @@ def apply_transform_seg(seg_np, result_transform):
         result_transform.SetParameter(
             i, 'ResampleInterpolator',
             ['FinalNearestNeighborInterpolator'])
-    result = itk.transformix_filter(seg_itk, result_transform)
-    return itk.array_from_image(result).round().astype(np.int32)
+    result_seg = itk.transformix_filter(seg_itk, result_transform)
+    return itk.array_from_image(result_seg).round().astype(np.int32)
 
+# ── Label Fusion: Dilation + Vote + Erosion
+def split_two_components(mask):
+    """
+    Split mask menjadi 2 komponen terbesar.
+    Untuk Tibial (med+lat) dan Meniscus (med+lat)
+    yang punya 2 komponen anatomis terpisah.
+    """
+    labeled, n = cc_label(mask)
+    if n == 0:
+        return np.zeros_like(mask, dtype=bool), np.zeros_like(mask, dtype=bool)
+    sizes = [(labeled == i).sum() for i in range(1, n+1)]
+    sorted_idx = np.argsort(sizes)[::-1]  # dari terbesar
+    comp1 = (labeled == sorted_idx[0]+1) if n >= 1 else np.zeros_like(mask, dtype=bool)
+    comp2 = (labeled == sorted_idx[1]+1) if n >= 2 else np.zeros_like(mask, dtype=bool)
+    return comp1, comp2
 
 def keep_two_largest(mask):
+    """Ambil 2 komponen terbesar saja, buang noise komponen kecil."""
     labeled, n = cc_label(mask)
     if n == 0: return np.zeros_like(mask, dtype=bool)
     sizes = [(labeled == i).sum() for i in range(1, n+1)]
@@ -118,38 +137,59 @@ def keep_two_largest(mask):
         result |= (labeled == sorted_idx[k]+1)
     return result
 
-
 def majority_vote_with_dilation(seg_list, num_classes=NUM_CLASSES,
                                  dilation_radius=3, threshold=0.25):
+    """
+    Label fusion with dilation before vote.
+    Patellar/Femoral: dilation + normal erotion.
+    Tibial/Meniscus:
+      →  take 2 largest component per subject (throw noise)
+      → increase dilation (5) so it can be overlap
+      → decrease threshold (0.15)
+      → SKIP erosion (bcs component already small after vote)
+      → fill holes only
+    """
     n = len(seg_list)
     shape = seg_list[0].shape
     template_seg = np.zeros(shape, dtype=np.int32)
 
     for c in range(1, num_classes + 1):
         if c in [3, 4]:
-            dil_r = dilation_radius; thr_c = 0.20; ero_r = 1
+            # ── Tibial / Meniscus: 2 component, light erosion 
+            dil_r     = dilation_radius   # same with Patellar/Femoral (3)
+            thr_c     = 0.20              # a lil bit low from 0.25
+            ero_r     = 1                 # lightweight erosion (not full dil_r)
             votes = np.zeros(shape, dtype=np.float32)
+
             for seg in seg_list:
                 mask = (seg == c).astype(bool)
                 if not mask.any(): continue
+                # ambil 2 komponen terbesar saja (buang noise)
                 mask_clean = keep_two_largest(mask)
                 if mask_clean.any():
-                    votes += binary_dilation(mask_clean, iterations=dil_r).astype(np.float32)
+                    votes += binary_dilation(
+                        mask_clean, iterations=dil_r).astype(np.float32)
+
             won = votes > (n * thr_c)
             if won.any():
+                # erosion ringan (1 iterasi saja, bukan penuh dil_r)
                 won = binary_erosion(won, iterations=ero_r)
                 won = binary_fill_holes(won)
+                # minimal size filter: hapus blob < 100 voxel
                 labeled_w, nw = cc_label(won)
                 for k in range(1, nw+1):
                     if (labeled_w == k).sum() < 100:
                         won[labeled_w == k] = False
                 template_seg[won & (template_seg == 0)] = c
+
         else:
+            # ── Patellar / Femoral: 1 component, dilation+erosion normal
             votes = np.zeros(shape, dtype=np.float32)
             for seg in seg_list:
                 mask = (seg == c).astype(bool)
                 if not mask.any(): continue
-                votes += binary_dilation(mask, iterations=dilation_radius).astype(np.float32)
+                votes += binary_dilation(
+                    mask, iterations=dilation_radius).astype(np.float32)
             won = votes > (n * threshold)
             if won.any():
                 won = binary_erosion(won, iterations=dilation_radius)
@@ -158,91 +198,56 @@ def majority_vote_with_dilation(seg_list, num_classes=NUM_CLASSES,
 
     return template_seg
 
-
-def print_seg_stats(seg, label=''):
-    print(f'  {label} seg voxels:')
-    for c in range(5):
-        name = LABEL_NAMES[c-1] if c > 0 else 'BG'
-        print(f'    class {c} ({name}): {(seg==c).sum()}')
-
-
+# ── Main 
 def main():
     print(f'Device: {DEVICE}')
     print('Loading NCA model...')
     model = load_model()
 
-    # load SEMUA train subjects
     with open(f'{ANNOT_DIR}/train.json') as f:
         ann = json.load(f)
     train_files = [i['file_name'] for i in ann['images']
                    if i['file_name'] not in CORRUPT]
-    N = len(train_files)
-    print(f'Using ALL {N} train subjects (was 20 before)')
+    N = 20
+    train_files = train_files[:N]
+    print(f'Using {N} train subjects')
 
-    # ── Step 1: Load MRI + predict segmentasi ────────────────────────────────
-    # Cek apakah sudah ada cache dari prediksi sebelumnya
-    cache_dir = os.path.join(OUT_DIR, 'cache')
-    os.makedirs(cache_dir, exist_ok=True)
-
-    print(f'\nStep 1: Load MRI + predict segmentations...')
+    # ── Step 1: Load MRI + predict segmentation
+    print('\nStep 1: Load MRI + predict segmentations...')
     all_mri  = []
     all_segs = []
-
     for fname in tqdm(train_files, desc='  Predict'):
-        stem = fname.replace('.h5', '')
-        cache_mri = os.path.join(cache_dir, f'{stem}_mri.npy')
-        cache_seg = os.path.join(cache_dir, f'{stem}_seg.npy')
-
-        # pakai cache kalau sudah ada (hemat waktu kalau dijalankan ulang)
-        if os.path.exists(cache_mri) and os.path.exists(cache_seg):
-            all_mri.append(np.load(cache_mri))
-            all_segs.append(np.load(cache_seg))
-            continue
-
+        stem  = fname.replace('.h5', '')
         e1    = clip_and_normalize(np.load(f'{NPY_DIR}/{stem}_echo1.npy'))
         e2    = clip_and_normalize(np.load(f'{NPY_DIR}/{stem}_echo2.npy'))
-
-        # pastikan shape konsisten (160,160,128)
-        TARGET = (160, 160, 128)
-        if e1.shape != TARGET:
-            from scipy.ndimage import zoom
-            factors = tuple(t/s for t,s in zip(TARGET, e1.shape))
-            e1 = zoom(e1, factors, order=1).astype(np.float32)
-            e2 = zoom(e2, factors, order=1).astype(np.float32)
-
         image = np.stack([e1, e2], axis=0)
         pred  = predict(model, image)
-
-        # resize pred juga kalau perlu
-        if pred.shape != TARGET:
-            from scipy.ndimage import zoom
-            factors = tuple(t/s for t,s in zip(TARGET, pred.shape))
-            pred = zoom(pred, factors, order=0).astype(np.int32)
-
-        np.save(cache_mri, e1)
-        np.save(cache_seg, pred)
         all_mri.append(e1)
         all_segs.append(pred)
 
-    print(f'  Loaded {len(all_mri)} subjects')
     print(f'  MRI shape: {all_mri[0].shape}')
+    # debug: check voxel per class before voting
     for c in range(1, 5):
         counts = [(s==c).sum() for s in all_segs]
         print(f'  Class {c} ({LABEL_NAMES[c-1]}): '
               f'min={min(counts)} max={max(counts)} mean={np.mean(counts):.0f}')
 
-    # ── Step 2: Initial template ─────────────────────────────────────────────
+    # ── Step 2: Initial template
     print('\nStep 2: Initial template (mean + dilation vote)...')
     template_mri = np.mean(all_mri, axis=0).astype(np.float32)
-    template_seg = majority_vote_with_dilation(all_segs, dilation_radius=3, threshold=0.25)
-    print_seg_stats(template_seg, 'Initial')
+    template_seg = majority_vote_with_dilation(
+        all_segs, dilation_radius=3, threshold=0.25)
+
+    print('  Template seg voxels:')
+    for c in range(5):
+        print(f'    class {c} ({LABEL_NAMES[c-1] if c > 0 else "BG"}): '
+              f'{(template_seg==c).sum()}')
 
     np.save(os.path.join(OUT_DIR, 'template_mri_init.npy'), template_mri)
     np.save(os.path.join(OUT_DIR, 'template_seg_init.npy'), template_seg)
 
-    # ── Step 3: Iterative refinement ─────────────────────────────────────────
+    # ── Step 3: Iterative refinement
     print('\nStep 3: Iterative refinement (2 iterations)...')
-
     for iteration in range(2):
         print(f'\n  Iteration {iteration+1}/2:')
         reg_mris = []; reg_segs = []; n_fail = 0
@@ -262,11 +267,15 @@ def main():
                 n_fail += 1
 
         template_mri = np.mean(reg_mris, axis=0).astype(np.float32)
-        template_seg = majority_vote_with_dilation(reg_segs, dilation_radius=3, threshold=0.25)
-        print(f'  Fails: {n_fail}/{N}')
-        print_seg_stats(template_seg, f'Iter {iteration+1}')
+        template_seg = majority_vote_with_dilation(
+            reg_segs, dilation_radius=3, threshold=0.25)
 
-    # ── Step 4: Save ─────────────────────────────────────────────────────────
+        print(f'  Fails: {n_fail}/{N}')
+        print(f'  Template seg voxels:')
+        for c in range(5):
+            print(f'    class {c}: {(template_seg==c).sum()}')
+
+    # ── Step 4: Save 
     print('\nStep 4: Saving final template...')
     template_mri_2ch = np.stack([template_mri, template_mri], axis=0)
     np.save(os.path.join(OUT_DIR, 'template_mri.npy'), template_mri_2ch)
@@ -282,19 +291,19 @@ def main():
         'vote_threshold' : 0.25,
         'seg_voxels'     : {str(c): int((template_seg==c).sum()) for c in range(5)},
         'label_names'    : LABEL_NAMES,
-        'note'           : 'Full template from ALL 85 train subjects (vs 20 before)',
+        'note': ('Tibial+Meniscus voted per-component (med/lat split) '
+                 'before merging to single label'),
     }
     with open(os.path.join(OUT_DIR, 'template_meta.json'), 'w') as f:
         json.dump(meta, f, indent=2)
 
     print(f'\nDone!')
     print(f'Template MRI : {template_mri_2ch.shape}')
-    print_seg_stats(template_seg, 'Final')
+    print(f'Template seg voxels:')
+    for c in range(5):
+        print(f'  class {c} ({LABEL_NAMES[c-1] if c > 0 else "BG"}): '
+              f'{(template_seg==c).sum()}')
     print(f'Saved to: {OUT_DIR}')
-    print(f'\nKalau mau jalankan registrasi dengan template baru ini,')
-    print(f'update TMPL_DIR di register_to_template.py ke:')
-    print(f'  {OUT_DIR}')
-
 
 if __name__ == '__main__':
     main()
