@@ -1,16 +1,11 @@
 # morphometrics_subject_space.py
 """
-Hitung morfologi kartilago langsung di subject space
-(tanpa registrasi ke template) — lebih akurat, tidak ada distorsi.
-
-Mengikuti Panfilov 2022: morfologi dihitung per subjek di space asli,
-lalu statistik dirata-rata across subjects.
-
-Metrik per struktur:
+Compute cartilage morphology directly in subject space
+(without registration to template) to avoid warping distortion.
+Morphological metrics per structure:
   - Volume (mm³, cm³)
-  - Mean thickness (mm) via EDT
+  - Mean thickness (mm) via Euclidean Distance Transform
   - Surface area (mm²)
-  - FCL% (Full-thickness Cartilage Loss) — opsional
 
 Output:
   results/morphometrics/
@@ -41,6 +36,7 @@ from train_mednca_v5_4class import (
 )
 import torch
 
+# Update these paths according to your setup
 NPY_DIR   = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
 ANNOT_DIR = '/data1/nitis/kneeproject/data/qdess/v1-release/annotations/v1.0.0'
 BEST_PATH = '/data1/nitis/kneeproject/checkpoints/mednca3d_v5_4class_best.pt'
@@ -52,8 +48,7 @@ SPACING    = (1.0, 1.0, 1.0)  # mm (1mm iso)
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
-
-# ── Model ─────────────────────────────────────────────────────────────────────
+# ── Model
 def keep_largest_component(pred):
     result = pred.copy()
     for c in range(1, NUM_CLASSES + 1):
@@ -68,7 +63,6 @@ def keep_largest_component(pred):
         result[labeled == largest] = c
     return result
 
-
 def load_model():
     model = MedNCA3D(
         CHANNEL_N, HIDDEN_SIZE, IN_CHANNELS, NUM_CLASSES,
@@ -79,7 +73,6 @@ def load_model():
     model.eval()
     return model
 
-
 def predict(model, image):
     img_t = torch.from_numpy(image).float().unsqueeze(0).to(DEVICE)
     with torch.no_grad():
@@ -88,12 +81,10 @@ def predict(model, image):
     del img_t, out; torch.cuda.empty_cache()
     return keep_largest_component(pred)
 
-
-# ── Morphometrics ─────────────────────────────────────────────────────────────
+# ── Morphometrics 
 def compute_volume(mask, spacing):
     voxel_vol = spacing[0] * spacing[1] * spacing[2]
     return float(mask.sum()) * voxel_vol
-
 
 def compute_thickness(mask, spacing):
     """
@@ -105,7 +96,6 @@ def compute_thickness(mask, spacing):
     dist = distance_transform_edt(mask, sampling=spacing)
     return float(2.0 * dist[mask].mean())
 
-
 def compute_surface_area(mask, spacing):
     """
     Surface area estimasi dari boundary voxels.
@@ -116,7 +106,6 @@ def compute_surface_area(mask, spacing):
     boundary = mask & ~eroded
     face_area = spacing[0] * spacing[1]
     return float(boundary.sum() * face_area)
-
 
 def compute_morphology(pred, spacing=SPACING):
     voxel_vol = spacing[0] * spacing[1] * spacing[2]
@@ -144,8 +133,7 @@ def compute_morphology(pred, spacing=SPACING):
         }
     return results
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── Main 
 def main():
     print(f'Device: {DEVICE}')
     print('Loading NCA v5 4-class model...')
@@ -234,7 +222,6 @@ def main():
     print(f'  {csv_path}')
     print(f'  {json_path}')
     print(f'\nDone!')
-
 
 if __name__ == '__main__':
     main()
