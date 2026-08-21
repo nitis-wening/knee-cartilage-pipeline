@@ -1,8 +1,8 @@
 # test_unet3d_4class.py
 """
-Test UNet3D 4-class pada test set SKM-TEA.
-Post-processing: CC hanya Patellar + Femoral
-Output: CSV hasil per subjek + summary JSON
+Test UNet3D 4-class into  test set SKM-TEA.
+Post-processing: CC only Patellar + Femoral
+Output: CSV per subject + summary JSON
 """
 
 import os, json, math
@@ -23,7 +23,8 @@ from train_unet3d_4class import (
     PATCH_SIZE, OVERLAP, LABEL_NAMES,
 )
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config 
+# Update these paths according to your setup
 NPY_DIR   = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
 ANNOT_DIR = '/data1/nitis/kneeproject/data/qdess/v1-release/annotations/v1.0.0'
 BEST_PATH = '/data1/nitis/kneeproject/checkpoints/unet3d_4class_best.pt'
@@ -35,7 +36,6 @@ DEVICE    = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 CC_CLASSES = {1, 2}
 
 os.makedirs(OUT_DIR, exist_ok=True)
-
 
 def keep_largest_component(pred):
     result = pred.copy()
@@ -52,7 +52,6 @@ def keep_largest_component(pred):
         result[labeled == largest] = c
     return result
 
-
 def main():
     print(f'Device : {DEVICE}')
     print(f'Loading UNet3D 4-class from {BEST_PATH}...')
@@ -65,7 +64,7 @@ def main():
     print(f'Classes    : {LABEL_NAMES}')
     print(f'CC classes : Patellar + Femoral only')
 
-    # ── Validation ────────────────────────────────────────────────────────────
+    # ── Validation
     print('\nRunning validation...')
     with open(f'{ANNOT_DIR}/val.json') as f:
         ann = json.load(f)
@@ -106,7 +105,7 @@ def main():
     print('-'*42)
     print(f'{"Average":<12} {val_dsc.mean():>8.4f} {val_hd95.mean():>8.2f} {val_vs.mean():>8.4f}')
 
-    # ── Test ──────────────────────────────────────────────────────────────────
+    # ── Test
     print('\nRunning test set...')
     with open(f'{ANNOT_DIR}/test.json') as f:
         ann = json.load(f)
