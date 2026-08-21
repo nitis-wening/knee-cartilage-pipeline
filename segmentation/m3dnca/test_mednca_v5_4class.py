@@ -26,6 +26,7 @@ from train_mednca_v5_4class import (
 )
 
 # ── Config
+# Update these paths according to your setup
 NPY_DIR   = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
 ANNOT_DIR = '/data1/nitis/kneeproject/data/qdess/v1-release/annotations/v1.0.0'
 BEST_PATH = '/data1/nitis/kneeproject/checkpoints/mednca3d_v5_4class_best.pt'
