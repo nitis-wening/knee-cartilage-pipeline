@@ -138,9 +138,9 @@ pip install torch numpy SimpleITK itk-elastix scipy pandas matplotlib scikit-ima
 
 | Resource | Link |
 |----------|------|
-| SKM-TEA preprocessed (1mm isotropic) | [Google Drive](#) |
-| Segmentation results (NIfTI for 3D Slicer) | [Google Drive](#) |
-| Model checkpoints | [Google Drive](#) |
+| SKM-TEA preprocessed (1mm isotropic) | [https://drive.google.com/drive/folders/146JFbZ9s0-1ZV0fEg2KiGvDILvIYpVRE?usp=drive_link](#) |
+| M3DNCA segmentation results (NIfTI for 3D Slicer) | [https://drive.google.com/drive/folders/1Ot5Dz6VNdEmebEjR2KCOnR-yncNmlfWG?usp=sharing](#) |
+| Model checkpoints | [https://drive.google.com/drive/folders/1If_HH1bJkxYOzhKACF4Mj4vry-57DJrw?usp=drive_link](#) |
 
 > **Note:** Update paths in each script according to your local setup before running.
 
@@ -148,8 +148,6 @@ pip install torch numpy SimpleITK itk-elastix scipy pandas matplotlib scikit-ima
 
 - Kalkhof et al., Med-NCA: Robust Medical Image Segmentation using Neural Cellular Automata, IPMI 2023
 - Yao et al., CartiMorph: A framework for automated knee articular cartilage morphometrics, Medical Image Analysis 2024. DOI: 10.1016/j.media.2023.103035
-- Isensee et al., nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation, Nature Methods 2021. DOI: 10.1038/s41592-020-01008-z
-- Panfilov et al., Improving Robustness of Deep Learning Based Knee MRI Segmentation, ICCV Workshop 2019. DOI: 10.1109/ICCVW.2019.00017
 
 ## Acknowledgements
 
