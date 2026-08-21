@@ -1,12 +1,12 @@
 # train_mednca_v5_4class.py
 """
-NCA v5 config dengan 4 kelas (sesuai benchmark resmi SKM-TEA):
+NCA v5 config with 4 class :
   1 = Patellar cartilage
   2 = Femoral cartilage
-  3 = Tibial cartilage  (TC-med + TC-lat digabung)
-  4 = Meniscus          (Men-med + Men-lat digabung)
+  3 = Tibial cartilage  (TC-med + TC-lat merged)
+  4 = Meniscus          (Men-med + Men-lat merged)
 
-Semua config sama persis dengan v5:
+All config same with v5:
   channel_n=16, hidden_size=64, steps=10+20
   patch=80³, LR=4e-4, Adam, batch_dup=4
   dataset=npy_1mm (tanpa crop)
@@ -22,10 +22,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from scipy.ndimage import distance_transform_edt
 
-# ══════════════════════════════════════════════════════════════════════════════
 # CONFIG
-# ══════════════════════════════════════════════════════════════════════════════
-
 DATA_ROOT   = '/data1/nitis/kneeproject/data/qdess/v1-release'
 ANNOT_DIR   = os.path.join(DATA_ROOT, 'annotations/v1.0.0')
 NPY_DIR     = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
@@ -68,10 +65,7 @@ RESUME    = False
 CKPT_PATH = os.path.join(CKPT_DIR, 'mednca3d_v5_4class_resume.pt')
 BEST_PATH = os.path.join(CKPT_DIR, 'mednca3d_v5_4class_best.pt')
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MODEL — sama persis v5
-# ══════════════════════════════════════════════════════════════════════════════
+# MODEL — same with v5
 
 class BackboneNCA3D(nn.Module):
     def __init__(self, channel_n=16, hidden_size=64, fire_rate=0.5,
@@ -103,7 +97,6 @@ class BackboneNCA3D(nn.Module):
         xn   = x+delta*mask
         post = F.max_pool3d(xn[:,-1:],3,1,1)>self.life_mask_threshold
         return xn*(pre&post).float()
-
 
 class MedNCA3D(nn.Module):
     def __init__(self, channel_n=16, hidden_size=64, input_channels=2,
@@ -138,11 +131,7 @@ class MedNCA3D(nn.Module):
         for _ in range(self.steps_fine): su=self.nca_fine(su)
         return su[:,:self.output_channels+1]
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # DATASET
-# ══════════════════════════════════════════════════════════════════════════════
-
 def clip_and_normalize(vol):
     vol=vol.astype(np.float32); mask=vol>0
     if mask.sum()==0: return vol
@@ -150,7 +139,6 @@ def clip_and_normalize(vol):
     vmin=vol[mask].min(); vmax=vol[mask].max()
     if vmax>vmin: vol=(vol-vmin)/(vmax-vmin)
     vol[~mask]=0.0; return vol.astype(np.float32)
-
 
 def seg_to_label_4class(seg):
     """
@@ -169,7 +157,6 @@ def seg_to_label_4class(seg):
     label[seg[..., 5]] = 4  # Men-lat → Meniscus (gabung)
     return label
 
-
 def augment_clinical(image, label):
     if random.random()<0.5:
         image=np.flip(image,axis=2).copy(); label=np.flip(label,axis=1).copy()
@@ -183,7 +170,6 @@ def augment_clinical(image, label):
         for c in range(image.shape[0]):
             image[c]=np.power(image[c],random.uniform(0.9,1.1)).astype(np.float32)
     return image, label
-
 
 def sample_patch_balanced(image, label, patch_size, pos_ratio=0.8):
     _,H,W,D=image.shape; pH,pW,pD=patch_size
@@ -201,7 +187,6 @@ def sample_patch_balanced(image, label, patch_size, pos_ratio=0.8):
             return image[:,h0:h0+pH,w0:w0+pW,d0:d0+pD].copy(),label[h0:h0+pH,w0:w0+pW,d0:d0+pD].copy()
     h0=random.randint(0,max(0,H-pH)); w0=random.randint(0,max(0,W-pW)); d0=random.randint(0,max(0,D-pD))
     return image[:,h0:h0+pH,w0:w0+pW,d0:d0+pD].copy(),label[h0:h0+pH,w0:w0+pW,d0:d0+pD].copy()
-
 
 class SKMTEADatasetNPY(Dataset):
     def __init__(self,split,npy_dir,annot_dir,patch_size=(80,80,80),pos_ratio=0.8,do_augment=True):
@@ -228,10 +213,7 @@ class SKMTEADatasetNPY(Dataset):
             return {'image':torch.from_numpy(ip).float(),'label':torch.from_numpy(lp).long()}
         return {'image':torch.from_numpy(image).float(),'label':torch.from_numpy(label).long()}
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # LOSS & METRICS
-# ══════════════════════════════════════════════════════════════════════════════
 
 class DiceFocalLoss(nn.Module):
     def __init__(self,smooth=1e-5): super().__init__(); self.smooth=smooth
@@ -314,11 +296,7 @@ def get_fire_rate(epoch,max_epochs):
     p=epoch/max_epochs; fc=FIRE_RATE_START-(FIRE_RATE_START-FIRE_RATE_END)*p
     return fc,fc*(FIRE_RATE_FINE/FIRE_RATE_COARSE)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # TRAINING
-# ══════════════════════════════════════════════════════════════════════════════
-
 def train_one_epoch(model,loader,optimizer,loss_fn,device,epoch):
     model.train(); el=0.0; step=0
     fc,ff=get_fire_rate(epoch,MAX_EPOCHS); model.set_fire_rate(fc,ff)
@@ -354,11 +332,7 @@ def validate(model,loader,device):
             del pi,lc
     return np.mean(dl,axis=0),np.mean(hl,axis=0),np.mean(vl,axis=0)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
-# ══════════════════════════════════════════════════════════════════════════════
-
 if __name__=='__main__':
     os.makedirs(LOG_DIR,exist_ok=True); os.makedirs(CKPT_DIR,exist_ok=True); os.makedirs(RESULTS_DIR,exist_ok=True)
     random.seed(SEED); np.random.seed(SEED); torch.manual_seed(SEED); torch.cuda.manual_seed_all(SEED)
