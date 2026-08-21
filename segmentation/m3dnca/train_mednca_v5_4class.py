@@ -23,6 +23,7 @@ from tqdm import tqdm
 from scipy.ndimage import distance_transform_edt
 
 # CONFIG
+# Update these paths according to your setup
 DATA_ROOT   = '/data1/nitis/kneeproject/data/qdess/v1-release'
 ANNOT_DIR   = os.path.join(DATA_ROOT, 'annotations/v1.0.0')
 NPY_DIR     = '/data1/nitis/kneeproject/data/qdess_npy_1mm'
