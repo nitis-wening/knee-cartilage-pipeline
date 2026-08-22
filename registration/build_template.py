@@ -127,7 +127,7 @@ def split_two_components(mask):
     return comp1, comp2
 
 def keep_two_largest(mask):
-    """Ambil 2 komponen terbesar saja, buang noise komponen kecil."""
+    """Take 2 biggest component only, throw a little noise component."""
     labeled, n = cc_label(mask)
     if n == 0: return np.zeros_like(mask, dtype=bool)
     sizes = [(labeled == i).sum() for i in range(1, n+1)]
@@ -164,7 +164,7 @@ def majority_vote_with_dilation(seg_list, num_classes=NUM_CLASSES,
             for seg in seg_list:
                 mask = (seg == c).astype(bool)
                 if not mask.any(): continue
-                # ambil 2 komponen terbesar saja (buang noise)
+                # Take 2 biggest component only (throw noise)
                 mask_clean = keep_two_largest(mask)
                 if mask_clean.any():
                     votes += binary_dilation(
@@ -172,7 +172,7 @@ def majority_vote_with_dilation(seg_list, num_classes=NUM_CLASSES,
 
             won = votes > (n * thr_c)
             if won.any():
-                # erosion ringan (1 iterasi saja, bukan penuh dil_r)
+                # erosion ringan (1 iteration only, not full dil_r)
                 won = binary_erosion(won, iterations=ero_r)
                 won = binary_fill_holes(won)
                 # minimal size filter: hapus blob < 100 voxel
