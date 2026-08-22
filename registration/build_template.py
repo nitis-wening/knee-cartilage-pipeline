@@ -113,9 +113,9 @@ def apply_transform_seg(seg_np, result_transform):
 # ── Label Fusion: Dilation + Vote + Erosion
 def split_two_components(mask):
     """
-    Split mask menjadi 2 komponen terbesar.
-    Untuk Tibial (med+lat) dan Meniscus (med+lat)
-    yang punya 2 komponen anatomis terpisah.
+    Split mask into the 2 biggest component.
+    For Tibial (med+lat) dan Meniscus (med+lat)
+    that have 2 separated component anatomy. 
     """
     labeled, n = cc_label(mask)
     if n == 0:
