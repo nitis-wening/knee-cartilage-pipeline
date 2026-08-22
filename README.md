@@ -138,10 +138,10 @@ pip install torch numpy SimpleITK itk-elastix scipy pandas matplotlib scikit-ima
 
 | Resource | Link |
 |----------|------|
-| SKM-TEA preprocessed (1mm isotropic) | [https://drive.google.com/drive/folders/146JFbZ9s0-1ZV0fEg2KiGvDILvIYpVRE?usp=drive_link](#) |
-| M3DNCA segmentation results (NIfTI for 3D Slicer) | [https://drive.google.com/drive/folders/1Ot5Dz6VNdEmebEjR2KCOnR-yncNmlfWG?usp=sharing](#) |
-| Registration results (NIfTI for 3D Slicer) | [https://drive.google.com/drive/folders/1raOfFXyJSopzHDt07LJoxxpq4C-7EIrQ?usp=drive_link](#) |
-| Model checkpoints | [https://drive.google.com/drive/folders/1If_HH1bJkxYOzhKACF4Mj4vry-57DJrw?usp=drive_link](#) |
+| SKM-TEA preprocessed (1mm isotropic) | [https://drive.google.com/drive/folders/13GSdykq_fO42d6JnEiItPuT3GXTf5X41?usp=drive_link](#) |
+| M3DNCA segmentation results (NIfTI for 3D Slicer) | [https://drive.google.com/drive/folders/14KAKHjEHo-EWB3PcH6j8sa-vUj0KI-e_?usp=drive_link](#) |
+| Registration results (NIfTI for 3D Slicer) | [https://drive.google.com/drive/folders/1bmKxj7Y-v6pl9PUdLm0sCnDWClYJBKyk?usp=drive_link](#) |
+| Model checkpoints | [https://drive.google.com/drive/folders/168MAX0LGvQMCAIBLUO-7WGTV9XqgK1mM?usp=drive_link](#) |
 
 > **Note:** Update paths in each script according to your local setup before running.
 
